@@ -1,0 +1,51 @@
+{
+  "digests_identical_across_thread_counts": true,
+  "rows": [
+    {
+      "parallel_efficiency": 1.0,
+      "scenarios_per_second": 72.60607008862381,
+      "seconds": 6.335558438,
+      "speedup_vs_first": 1.0,
+      "suite_digest": "a14a3ba90adcac08cc60f847ae89290e13446c982903de48527fc4184c13194b",
+      "threads": 1,
+      "vehicle_ticks_per_second": 52276370.46380915
+    },
+    {
+      "parallel_efficiency": 0.9741279710900833,
+      "scenarios_per_second": 141.455207488511,
+      "seconds": 3.251912801,
+      "speedup_vs_first": 1.9482559421801666,
+      "suite_digest": "a14a3ba90adcac08cc60f847ae89290e13446c982903de48527fc4184c13194b",
+      "threads": 2,
+      "vehicle_ticks_per_second": 101847749.39172792
+    },
+    {
+      "parallel_efficiency": 0.858454675709535,
+      "scenarios_per_second": 249.31608140989334,
+      "seconds": 1.845047449,
+      "speedup_vs_first": 3.43381870283814,
+      "suite_digest": "a14a3ba90adcac08cc60f847ae89290e13446c982903de48527fc4184c13194b",
+      "threads": 4,
+      "vehicle_ticks_per_second": 179507578.6151232
+    },
+    {
+      "parallel_efficiency": 0.6328541776156604,
+      "scenarios_per_second": 367.5924382067282,
+      "seconds": 1.251385916,
+      "speedup_vs_first": 5.062833420925283,
+      "suite_digest": "a14a3ba90adcac08cc60f847ae89290e13446c982903de48527fc4184c13194b",
+      "threads": 8,
+      "vehicle_ticks_per_second": 264666555.50884432
+    },
+    {
+      "parallel_efficiency": 0.46186564207439756,
+      "scenarios_per_second": 402.4109901597714,
+      "seconds": 1.143109933,
+      "speedup_vs_first": 5.5423877048927706,
+      "suite_digest": "a14a3ba90adcac08cc60f847ae89290e13446c982903de48527fc4184c13194b",
+      "threads": 12,
+      "vehicle_ticks_per_second": 289735912.9150354
+    }
+  ],
+  "scenarios": 460
+}

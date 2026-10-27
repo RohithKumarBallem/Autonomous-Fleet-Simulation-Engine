@@ -1,0 +1,17 @@
+# build output
+/target/
+/core/build/
+/orchestrator/target/
+*.o
+
+# runtime artifacts
+/out/
+/data/
+/bench/work/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+
+# airflow local state
+/pipelines/airflow/airflow_home/

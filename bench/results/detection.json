@@ -1,0 +1,103 @@
+{
+  "all_feeds": {
+    "feeds": 6,
+    "truth_events": 144,
+    "detected_events": 126,
+    "matched": 120,
+    "precision": 0.952,
+    "recall": 0.833,
+    "per_kind": {
+      "demand_surge": {
+        "truth": 34,
+        "detected": 35,
+        "matched": 32,
+        "recall": 0.94,
+        "precision": 0.91
+      },
+      "dispatch_latency": {
+        "truth": 37,
+        "detected": 21,
+        "matched": 21,
+        "recall": 0.57,
+        "precision": 1.0
+      },
+      "gps_spoof": {
+        "truth": 21,
+        "detected": 20,
+        "matched": 19,
+        "recall": 0.9,
+        "precision": 0.95
+      },
+      "phantom_requests": {
+        "truth": 22,
+        "detected": 21,
+        "matched": 21,
+        "recall": 0.95,
+        "precision": 1.0
+      },
+      "sensor_dropout": {
+        "truth": 30,
+        "detected": 29,
+        "matched": 27,
+        "recall": 0.9,
+        "precision": 0.93
+      }
+    }
+  },
+  "held_out_feeds": {
+    "feeds": 5,
+    "truth_events": 120,
+    "detected_events": 105,
+    "matched": 99,
+    "precision": 0.943,
+    "recall": 0.825,
+    "per_kind": {
+      "demand_surge": {
+        "truth": 25,
+        "detected": 27,
+        "matched": 24,
+        "recall": 0.96,
+        "precision": 0.89
+      },
+      "dispatch_latency": {
+        "truth": 33,
+        "detected": 19,
+        "matched": 19,
+        "recall": 0.58,
+        "precision": 1.0
+      },
+      "gps_spoof": {
+        "truth": 17,
+        "detected": 16,
+        "matched": 15,
+        "recall": 0.88,
+        "precision": 0.94
+      },
+      "phantom_requests": {
+        "truth": 20,
+        "detected": 19,
+        "matched": 19,
+        "recall": 0.95,
+        "precision": 1.0
+      },
+      "sensor_dropout": {
+        "truth": 25,
+        "detected": 24,
+        "matched": 22,
+        "recall": 0.88,
+        "precision": 0.92
+      }
+    }
+  },
+  "feed_stats": {
+    "lines_total": 1102393,
+    "parsed": 1101283,
+    "malformed": 1110,
+    "duplicates_dropped": 10924,
+    "out_of_order": 14327,
+    "heartbeats": 1070752,
+    "requests": 19607,
+    "vehicles": 500,
+    "ticks": 2160
+  }
+}

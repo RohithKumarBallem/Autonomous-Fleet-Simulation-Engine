@@ -1,0 +1,8 @@
+.git
+data
+out
+bench/work
+orchestrator/target
+core/build
+pipelines/airflow/airflow_home
+**/__pycache__

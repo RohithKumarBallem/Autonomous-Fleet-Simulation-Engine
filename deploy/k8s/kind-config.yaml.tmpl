@@ -1,0 +1,17 @@
+# Rendered by scripts/k8s_up.sh (HOST_DATA_DIR is substituted).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: fleet
+nodes:
+  - role: control-plane
+    extraMounts:
+      - hostPath: ${HOST_DATA_DIR}
+        containerPath: /data
+  - role: worker
+    extraMounts:
+      - hostPath: ${HOST_DATA_DIR}
+        containerPath: /data
+  - role: worker
+    extraMounts:
+      - hostPath: ${HOST_DATA_DIR}
+        containerPath: /data

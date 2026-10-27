@@ -1,0 +1,29 @@
+{
+  "workload": {
+    "seeds_per_event": 20,
+    "scenarios": 482,
+    "field_vehicles": 500,
+    "field_hours": 6
+  },
+  "reps": 5,
+  "baseline_seconds": [
+    8.803,
+    8.725,
+    8.763,
+    9.162,
+    9.296
+  ],
+  "pipeline_seconds": [
+    8.094,
+    5.948,
+    5.978,
+    5.86,
+    5.781
+  ],
+  "baseline_median_s": 8.803,
+  "pipeline_median_s": 5.948,
+  "cycle_time_reduction_pct": 32.4,
+  "speedup_x": 1.48,
+  "suite_digest_identical": true,
+  "suite_digest": "3372bbff9ea5a470aefa5ac71aef4a702c48ba0fe1807bf469121c8bfda80f62"
+}

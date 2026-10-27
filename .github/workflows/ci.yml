@@ -1,0 +1,34 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: C++ kernel tests
+        run: make -C core test
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Rust orchestrator tests (links the C++ kernel)
+        run: cargo test --release --manifest-path orchestrator/Cargo.toml
+      - name: Pipeline demo (generate -> ingest -> simulate -> verify)
+        run: |
+          cargo build --release --manifest-path orchestrator/Cargo.toml
+          scripts/demo.sh
+
+  dag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: DAG imports cleanly
+        run: |
+          pip install "apache-airflow[cncf.kubernetes]==2.10.5" \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.11.txt"
+          AIRFLOW__CORE__DAGS_FOLDER=$PWD/pipelines/airflow/dags AIRFLOW__CORE__LOAD_EXAMPLES=False \
+            python -c "from airflow.models import DagBag; b = DagBag(include_examples=False); assert not b.import_errors, b.import_errors; assert 'fleet_telemetry_to_scenarios' in b.dags"

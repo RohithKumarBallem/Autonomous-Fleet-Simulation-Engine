@@ -1,0 +1,29 @@
+# Shared scratch space for scenario suites and shard results.
+# hostPath is only appropriate for a local kind cluster, where every node mounts the same host
+# directory at /data. On a real cluster replace this with a ReadWriteMany PVC (NFS, EFS, Filestore)
+# or switch `fleetctl run` to an object-store backend.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: fleet-data
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes: ["ReadWriteMany"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: fleet-local
+  hostPath:
+    path: /data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fleet-data
+  namespace: fleet
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: fleet-local
+  volumeName: fleet-data
+  resources:
+    requests:
+      storage: 5Gi

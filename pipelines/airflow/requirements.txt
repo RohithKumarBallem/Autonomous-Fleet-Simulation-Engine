@@ -1,0 +1,2 @@
+# Installed by scripts/setup_airflow.sh with the official Airflow constraints file.
+apache-airflow[cncf.kubernetes]==2.10.5

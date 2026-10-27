@@ -1,0 +1,16 @@
+{
+  "mode": "airflow_kubernetes_pod_operator",
+  "cluster": "kind, 3 nodes (1 control-plane, 2 workers), Kubernetes v1.37.0",
+  "shard_pods": 4,
+  "scenarios": 146,
+  "passed": 96,
+  "failed": 50,
+  "invariant_violations": 0,
+  "suite_digest": "7d9539b55a4dbadc57f394c7488ee8019fab4c6da818e9e6794cfccff5132b49",
+  "replay_verify": {
+    "replayed": 100,
+    "mismatches": 0,
+    "replay_threads": 3,
+    "note": "sample re-simulated locally and compared with the pod-produced state hashes"
+  }
+}

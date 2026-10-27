@@ -1,0 +1,31 @@
+[package]
+name = "fleetctl"
+version = "0.1.0"
+edition = "2021"
+description = "Orchestrator for the Autonomous Fleet Simulation Engine: telemetry ingest, scenario extraction, parallel/sharded runs, reporting"
+license = "MIT"
+build = "build.rs"
+
+[lib]
+name = "fleetctl"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fleetctl"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+rayon = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[build-dependencies]
+cc = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
