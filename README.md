@@ -216,7 +216,7 @@ not any real operator.
 - **Quiet-machine protocol.** Benchmarks ran after quitting Docker Desktop. An earlier set taken while unrelated containers loaded the CPU showed 2x slower single-thread throughput and large run-to-run spread, and was discarded.
 - **Single machine.** All timings are from one laptop. Relative comparisons within a table are more meaningful than absolute values.
 - **Determinism scope.** Bit-identical for a fixed binary and CPU architecture. The kernel uses its own PRNG and `-ffp-contract=off`, but I have not verified identity across compilers or architectures.
-- **CI is configured but unverified.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the same commands used locally; it has not been observed running on GitHub.
+- **CI.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the C++ tests, the Rust integration tests, the end-to-end demo (including replay verification) and an Airflow DAG import check on Ubuntu; it passed on the first push. It checks correctness only: it does not compare digests with the macOS ones, so cross-platform bit-identity is still unverified.
 
 ## Repository layout
 
