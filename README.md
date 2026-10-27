@@ -1,17 +1,55 @@
-# Autonomous Fleet Simulation Engine
+<h1 align="center">Autonomous Fleet Simulation Engine</h1>
 
-A deterministic simulator that stress-tests an autonomous ride-hailing fleet against adversarial conditions, plus the
-pipeline that turns raw vehicle telemetry into reproducible test scenarios and runs them at scale.
+<p align="center">
+  Turn raw vehicle telemetry into reproducible adversarial test scenarios, then run them against a simulated
+  autonomous ride-hailing fleet at scale.
+</p>
 
-- **C++17 kernel** simulates a fleet (demand, dispatch, vehicle dynamics) and injects five classes of faults: GPS spoofing, sensor dropout, demand surges, dispatch latency and phantom ride requests.
-- **Rust orchestrator (`fleetctl`)** ingests telemetry, detects anomalous episodes, builds a content-addressed scenario suite, and runs it in parallel and in shards. It links the C++ kernel through a stable C ABI.
-- **Apache Airflow** sequences the validation cycle: acquire, ingest, quality gate, build scenarios, sharded fan-out, aggregate, replay-verify, publish gate.
-- **Kubernetes** runs the shards as an Indexed Job: one pod per shard, no coordinator.
+<p align="center">
+  <a href="https://github.com/RohithKumarBallem/Autonomous-Fleet-Simulation-Engine/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/RohithKumarBallem/Autonomous-Fleet-Simulation-Engine/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="C++17" src="https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white">
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-B7410E?logo=rust&logoColor=white">
+  <img alt="Apache Airflow 2.10" src="https://img.shields.io/badge/Airflow-2.10-017CEE?logo=apacheairflow&logoColor=white">
+  <img alt="Kubernetes" src="https://img.shields.io/badge/Kubernetes-Indexed%20Jobs-326CE5?logo=kubernetes&logoColor=white">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-green"></a>
+</p>
+
+<p align="center">
+  <a href="#why-this-exists">Why</a> ·
+  <a href="#results-at-a-glance">Results</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#benchmarks-in-detail">Benchmarks</a> ·
+  <a href="#limitations-and-methodology">Limitations</a> ·
+  <a href="docs/architecture.md">Architecture</a>
+</p>
+
+---
+
+## Why this exists
+
+Autonomous fleets fail in rare, nasty conditions: spoofed GPS, sensors that go quiet, a sudden demand surge, a dispatcher
+that stalls, ride requests from riders who do not exist. You cannot wait for those to happen on the road, and an incident you
+cannot replay exactly is an incident you cannot fix.
+
+This project closes that loop:
+
+1. **Detect** anomalous episodes in a vehicle telemetry feed.
+2. **Translate** each episode into a seeded, content-addressed simulation scenario.
+3. **Replay** the whole suite against a deterministic fleet simulator, in parallel and across Kubernetes pods.
+4. **Judge** every run against service-level targets, and prove the results are reproducible.
+
+| Layer | Tech | Job |
+|---|---|---|
+| Simulation kernel | **C++17** | Fleet, demand, dispatch and five fault injectors. One scenario in, one metrics record out. |
+| Orchestrator `fleetctl` | **Rust** (rayon, clap) | Telemetry ingest, anomaly detection, scenario construction, parallel and sharded runs, reports, replay verification. Calls the kernel over a stable C ABI. |
+| Pipeline | **Apache Airflow** | One DAG run is one validation cycle: sequencing, retries, shard fan-out, data-quality and publish gates. |
+| Deployment | **Kubernetes** | An Indexed Job runs the shards as pods. Each pod finds its shard from `JOB_COMPLETION_INDEX`; there is no coordinator. |
 
 > **Read this first.** There is no real vehicle data in this repository. The telemetry is *synthetic*: a generator emits a
 > realistic-but-artificial feed (duplicates, late records, corrupt lines, packet loss) and injects anomalies whose true
-> positions are known, so the detection stage can be scored against ground truth. All metrics below were measured on this
-> code; the benchmark protocol and its limits are in [Methodology](#methodology-and-caveats).
+> positions are known, so detection can be scored against ground truth. Every number below was measured on this code on one
+> laptop; the protocol and its limits are in [Limitations and methodology](#limitations-and-methodology).
 
 ## Results at a glance
 
@@ -22,10 +60,14 @@ pipeline that turns raw vehicle telemetry into reproducible test scenarios and r
 | Engine correctness | **0 invariant violations** in every run; 10,236 C++ checks and 7 Rust integration tests pass |
 | Telemetry ingest | **1.10 M records (83 MB) in 0.25 s** on 12 threads (4.4 M records/s); 0.50 s on one thread |
 | Anomaly detection | **0.95 precision / 0.83 recall** against 144 injected anomalies over 6 feeds (0.94 / 0.82 on the 5 held-out feeds) |
-| Validation cycle time | **-51 % on a 1,142-scenario suite, -73 % on 4,442 scenarios**, versus a sequential single-worker baseline producing identical results. Only -7% at 262 scenarios, where fixed overhead dominates (see below) |
+| Validation cycle time | **-51 % on a 1,142-scenario suite, -73 % on 4,442 scenarios**, versus a sequential single-worker baseline producing identical results. Only -7 % at 262 scenarios, where fixed overhead dominates |
 | Kubernetes | Airflow `KubernetesPodOperator` ran 4 shard pods on a 3-node `kind` cluster; replayed results matched with 0 mismatches |
 
-Raw data: [`bench/results/`](bench/results). Everything below is regenerated by `scripts/bench_all.sh`.
+<p align="center"><img src="docs/img/throughput.svg" alt="Bar chart: scenarios per second rises from 73 on one thread to 412 on twelve threads" width="720"></p>
+<p align="center"><img src="docs/img/cycle-time.svg" alt="Grouped bar chart: validation cycle time of the sequential baseline versus the Airflow pipeline for five suite sizes, from -7.3% at 262 scenarios to -73.1% at 4,442" width="720"></p>
+
+The figures are drawn from the raw JSON in [`bench/results/`](bench/results) by [`bench/plot.py`](bench/plot.py), and the tables
+are generated by [`bench/summarize.py`](bench/summarize.py). Both are re-run by `scripts/bench_all.sh`.
 
 ## How it works
 
@@ -44,26 +86,64 @@ flowchart LR
     P0 -. rayon + C ABI .-> K[C++ kernel]
 ```
 
-1. **Ingest and detect.** Parse in parallel, drop malformed lines, sort and de-duplicate, then scan each vehicle's track for GPS discontinuities and silent gaps and each map tile for demand, cancellation and assignment-delay anomalies. Adjacent flagged tiles and windows merge into *episodes* (type, onset, duration, centre, radius, estimated intensity). Detectors are transparent threshold rules, not a trained model.
+1. **Ingest and detect.** Parse in parallel, drop malformed lines, sort and de-duplicate, then scan each vehicle's track for GPS discontinuities and silent gaps, and each map tile for demand, cancellation and assignment-delay anomalies. Adjacent flagged tiles and windows merge into *episodes* (type, onset, duration, centre, radius, estimated intensity). The detectors are transparent threshold rules, not a trained model.
 2. **Build scenarios.** Every episode becomes seeded replications, plus compound scenarios (two episodes overlapping) and fault-free controls. A scenario's id is the SHA-256 of its canonical JSON, and seeds and onset offsets are hashes of stable identifiers, so the same telemetry always yields byte-identical scenarios.
-3. **Run.** `fleetctl run` simulates scenarios on a worker pool, each call going through `fleet_run()` in the C++ kernel. `--shard i/N` selects the scenarios whose position in id order is `i mod N`. On Kubernetes an Indexed Job gives each pod its index through `JOB_COMPLETION_INDEX`.
-4. **Judge.** Each run is checked against an SLA (p95 rider wait, abandon rate, road congestion) and against the engine's own invariants. SLA failures are *findings*; invariant violations are engine bugs and fail the pipeline.
+3. **Run.** `fleetctl run` simulates scenarios on a worker pool, each call going through `fleet_run()` in the C++ kernel. `--shard i/N` selects the scenarios whose position in id order is `i mod N`.
+4. **Judge.** Each run is checked against a service-level target (p95 rider wait, abandon rate, road congestion) and against the engine's own invariants. SLA failures are *findings*; invariant violations are engine bugs and fail the pipeline.
 5. **Prove reproducibility.** `aggregate` hashes every `id:state_hash` pair into a suite digest, and `verify` re-simulates a sample on a different thread count and compares state hashes.
 
-The simulation model, fault semantics, detection rules and determinism contract are documented in [`docs/architecture.md`](docs/architecture.md).
+### The five adversarial faults
+
+| Fault | Effect inside the affected region |
+|---|---|
+| `gps_spoof` | The dispatcher sees displaced vehicle positions, so it mis-dispatches and real pickups get longer. |
+| `sensor_dropout` | Affected vehicles freeze; riders inside are stranded and waiting riders eventually cancel. |
+| `demand_surge` | Extra localised ride requests. |
+| `dispatch_latency` | The dispatcher skips requests in the region with some probability each tick. |
+| `phantom_requests` | Spoofed requests with no rider; a vehicle drives there and wastes the trip. |
+
+### Why the results are reproducible
+
+The kernel has its own PRNG (xoshiro256**) because `<random>` distributions are not specified bit-for-bit across standard
+libraries. Fault decisions are pure hashes, so adding a fault never shifts the demand stream and a faulted run can be compared
+against its clean twin. Floating-point contraction is off (`-ffp-contract=off`), ties break on id, and scenarios are
+content-addressed. The same suite therefore produces the same digest on one thread, on twelve, in five shards, or in eight
+Kubernetes pods. The simulation model, fault semantics, detection rules and the full determinism contract are in
+[`docs/architecture.md`](docs/architecture.md).
+
+### Example output
+
+`make demo` runs the whole chain on a generated feed (461 scenarios) and writes a report. An excerpt:
+
+```text
+# Fleet validation report
+
+- scenarios: 461 (passed 258, failed 203, pass rate 56.0%)
+- invariant violations: 0
+- simulated vehicle-ticks: 331920000
+- suite digest: eb6582a8eed11bc82e4be26ff518e36904d7edd9a63fd6c899d6ba0be452d2b7
+
+| group            | scenarios | pass rate | mean p95 wait (ticks) | mean abandon rate |
+|------------------|----------:|----------:|----------------------:|------------------:|
+| control          |        20 |    100.0% |                  42.4 |             0.00% |
+| single           |       420 |     55.0% |                  64.5 |             3.06% |
+| compound         |        21 |     33.3% |                  74.6 |             7.45% |
+
+Failure reasons: p95_wait 203, abandon_rate 133   (a scenario can fail both)
+```
+
+The digest is identical across runs and thread counts on the machine used here. Bit-identity is guaranteed for a fixed
+binary and CPU architecture, not across different ones.
 
 ## Quickstart
 
-Requirements: a C++17 compiler, Rust (stable), Python 3. Airflow, Docker, `kind` and `kubectl` are only needed for the pipeline and cluster steps.
+Requirements: a C++17 compiler, Rust (stable) and Python 3. Airflow, Docker, `kind` and `kubectl` are only needed for the
+pipeline and cluster steps.
 
 ```bash
 make test        # C++ kernel tests + Rust integration tests
 make demo        # telemetry -> detect -> scenarios -> simulate -> report -> replay-verify
 ```
-
-`make demo` prints a validation report and a suite digest. On the machine used for this README the digest is
-`eb6582a8eed11bc82e4be26ff518e36904d7edd9a63fd6c899d6ba0be452d2b7`; it is identical across runs and thread counts.
-Bit-identity is guaranteed for a fixed binary and CPU architecture, not across different ones.
 
 Run one scenario with the standalone C++ CLI:
 
@@ -72,7 +152,7 @@ make -C core
 core/build/fleetsim --seed 7 --fault demand_surge:300:150:32:40:12:6
 ```
 
-Run the pieces yourself:
+Run the stages yourself:
 
 ```bash
 F=orchestrator/target/release/fleetctl
@@ -93,8 +173,16 @@ source scripts/airflow_env.sh && "$AIRFLOW_BIN" db migrate
 scripts/run_pipeline.sh 2026-10-27       # one full validation cycle through the DAG
 ```
 
-The DAG is [`pipelines/airflow/dags/fleet_telemetry_to_scenarios.py`](pipelines/airflow/dags/fleet_telemetry_to_scenarios.py).
-It is configured entirely by environment variables (`FLEET_SHARDS`, `FLEET_EXEC_MODE`, `FLEET_SEEDS_PER_EVENT`, ...) so the same file runs on a laptop and on a cluster.
+The DAG is [`pipelines/airflow/dags/fleet_telemetry_to_scenarios.py`](pipelines/airflow/dags/fleet_telemetry_to_scenarios.py):
+
+```text
+acquire_telemetry -> ingest_and_detect -> quality_gate -> build_scenarios
+    -> run_shard_0 .. run_shard_N-1   (fan-out)
+    -> aggregate_report -> replay_verify -> publish_gate        (+ score_detection when ground truth exists)
+```
+
+It is configured entirely by environment variables (`FLEET_SHARDS`, `FLEET_EXEC_MODE`, `FLEET_SEEDS_PER_EVENT`, ...), so the same
+file runs on a laptop (`local`) and on a cluster (`kubernetes`, one `KubernetesPodOperator` per shard).
 
 ### Kubernetes
 
@@ -106,10 +194,11 @@ umask 000; FLEET_EXEC_MODE=kubernetes FLEET_WORK_DIR=$PWD/out/k8s \
 scripts/k8s_down.sh
 ```
 
-Manifests are in [`deploy/k8s/`](deploy/k8s). The storage is a `hostPath` volume that only makes sense on a local `kind`
-cluster; use a ReadWriteMany volume or an object store on a real one.
+Manifests are in [`deploy/k8s/`](deploy/k8s). Shard files are written atomically and `aggregate` de-duplicates by scenario id, so
+a retried pod cannot corrupt a result. The storage is a `hostPath` volume that only makes sense on a local `kind` cluster; use a
+ReadWriteMany volume or an object store on a real one.
 
-## Measured results
+## Benchmarks in detail
 
 Environment: Intel Core i7-9750H (6 cores / 12 threads), 16 GB, macOS 26.6; Apple clang 17, rustc 1.99.1, Python 3.9.6,
 Airflow 2.10.5, kind v0.33.0 (Kubernetes v1.37.0), Docker Desktop 29.6.2.
@@ -126,7 +215,7 @@ Airflow 2.10.5, kind v0.33.0 (Kubernetes v1.37.0), Docker Desktop 29.6.2.
 | 8 | 1.28 (1.25-1.29) | 359 | 259 | 4.95x | 62% |
 | 12 | 1.12 (1.10-1.14) | 412 | 297 | 5.68x | 47% |
 
-Efficiency drops past 6 threads because the CPU has 6 physical cores; the 12 logical threads share them. The suite digest
+Efficiency drops past 6 threads because the CPU has 6 physical cores and the 12 logical threads share them. The suite digest
 was identical for every thread count in every run.
 
 ### Telemetry ingest and anomaly detection
@@ -139,8 +228,8 @@ late or out-of-order records.
 | 1 | 0.504 | 2.19 M |
 | 12 | 0.248 | 4.44 M |
 
-Detection quality against the anomalies the generator injected (24 per feed, 5 fault types). The detector thresholds were
-set while looking at feed 1; feeds 2-6 are held out.
+Detection quality against the anomalies the generator injected (24 per feed, 5 fault types). The detector thresholds were set
+while looking at feed 1; feeds 2-6 are held out.
 
 | feeds | injected | detected | matched | precision | recall |
 |---|---:|---:|---:|---:|---:|
@@ -155,8 +244,8 @@ set while looking at feed 1; feeds 2-6 are held out.
 | phantom_requests | 22 | 21 | 21 | 0.95 | 1.00 |
 | sensor_dropout | 30 | 29 | 27 | 0.90 | 0.93 |
 
-Dispatch-latency episodes are the weak spot: they only touch the few requests that fall inside a small region, so many
-episodes carry too little evidence to flag. I did not tune further, because that would only fit the generator.
+Dispatch-latency episodes are the weak spot: they only touch the few requests that fall inside a small region, so many episodes
+carry too little evidence to flag. Further tuning was deliberately not done, because that would only fit the generator.
 
 ### Validation cycle time
 
@@ -165,7 +254,7 @@ pass/fail report over the derived scenario suite, including the replay check and
 
 - **Baseline:** the same binaries run stage by stage, single-threaded, one scenario at a time (`--threads 1`), no orchestration.
 - **Pipeline:** the Airflow DAG with 4 shards, using every core.
-- Runs are interleaved (baseline, pipeline, baseline, ...) so machine drift affects both. Both must produce the identical suite digest, otherwise the benchmark aborts.
+- Runs are interleaved (baseline, pipeline, baseline, ...) so machine drift affects both arms. Both must produce the identical suite digest, otherwise the benchmark aborts.
 
 | scenarios | runs | baseline (min-max) | pipeline (min-max) | cycle-time change | speed-up | same results |
 |---:|---:|---:|---:|---:|---:|:---:|
@@ -175,7 +264,7 @@ pass/fail report over the derived scenario suite, including the replay check and
 | 2,242 | 3 | 35.7 s (35.2-36.7) | 10.0 s (9.9-11.9) | -72.1% | 3.58x | yes |
 | 4,442 | 3 | 67.8 s (65.7-68.8) | 18.2 s (17.5-18.4) | -73.1% | 3.71x | yes |
 
-How to read this honestly:
+How to read this:
 
 - The gain depends on suite size. The pipeline carries a fixed orchestration cost (Airflow start-up and per-task process spawning), so a small suite barely benefits and the benefit grows as simulation time starts to dominate.
 - In local mode `airflow dags test` runs tasks one after another, so the speed-up here comes from the parallel runner inside each shard task, not from Airflow running tasks concurrently. On Kubernetes the shards are concurrent pods.
@@ -183,17 +272,17 @@ How to read this honestly:
 
 ### Kubernetes
 
-The same 461-scenario suite run as an Indexed Job with 1, 2, 4 and 8 pods produced the identical suite digest every time.
-An Airflow run with `FLEET_EXEC_MODE=kubernetes` created 4 shard pods through `KubernetesPodOperator`, and a local replay of
-100 scenarios matched the pod output exactly (146 scenarios, 0 invariant violations).
+The same 461-scenario suite run as an Indexed Job with 1, 2, 4 and 8 pods produced the identical suite digest every time. An
+Airflow run with `FLEET_EXEC_MODE=kubernetes` created 4 shard pods through `KubernetesPodOperator`, and a local replay of 100
+scenarios matched the pod output exactly (146 scenarios, 0 invariant violations).
 
-I am not publishing Kubernetes scaling numbers. The Docker VM was shared with unrelated, CPU-saturating containers during
-those runs, so the wall times are not a valid scaling benchmark. `scripts/bench_k8s.sh` reproduces the measurement on a quiet cluster.
+Kubernetes scaling numbers are not published. The Docker VM was shared with unrelated, CPU-saturating containers during those
+runs, so the wall times are not a valid scaling benchmark. `scripts/bench_k8s.sh` reproduces the measurement on a quiet cluster.
 
 ## What the reference city shows
 
-Reference city: 500 vehicles, 128 x 128 cells, 4 simulated hours, demand profile estimated from telemetry. SLA: p95 wait at most 10 min,
-abandon rate at most 1 %, at most 200 congestion events. Results for the 461-scenario demo suite (`make demo`):
+Reference city: 500 vehicles, 128 x 128 cells, 4 simulated hours, demand profile estimated from telemetry. Targets: p95 wait at
+most 10 min, abandon rate at most 1 %, at most 200 congestion events. Results for the 461-scenario demo suite (`make demo`):
 
 | group | scenarios | pass rate | mean p95 wait (ticks) | mean abandon rate |
 |---|---:|---:|---:|---:|
@@ -205,28 +294,28 @@ abandon rate at most 1 %, at most 200 congestion events. Results for the 461-sce
 | demand_surge | 160 | 0.0% | 90.3 | 8.02% |
 | compound (two faults) | 21 | 33.3% | 74.6 | 7.45% |
 
-Fault-free controls must pass: if they do not, the engine or the SLA is wrong. These numbers describe *this simple city model*,
-not any real operator.
+Fault-free controls must pass: if they do not, the engine or the target is wrong, not the platform under test. These numbers
+describe *this simple city model*, not any real operator.
 
-## Methodology and caveats
+## Limitations and methodology
 
 - **Synthetic telemetry.** Generated by `fleetctl telemetry-gen`. Event positions are known, which is what makes precision and recall measurable, but real feeds will be messier.
 - **Simple model.** Grid roads, greedy nearest-vehicle dispatch, one speed. The point is a reproducible harness for adversarial scenarios, not a calibrated market model.
 - **Heuristic intensities.** Fault intensities estimated from telemetry are monotone mappings from the evidence, not fitted physics.
 - **Quiet-machine protocol.** Benchmarks ran after quitting Docker Desktop. An earlier set taken while unrelated containers loaded the CPU showed 2x slower single-thread throughput and large run-to-run spread, and was discarded.
 - **Single machine.** All timings are from one laptop. Relative comparisons within a table are more meaningful than absolute values.
-- **Determinism scope.** Bit-identical for a fixed binary and CPU architecture. The kernel uses its own PRNG and `-ffp-contract=off`, but I have not verified identity across compilers or architectures.
-- **CI.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the C++ tests, the Rust integration tests, the end-to-end demo (including replay verification) and an Airflow DAG import check on Ubuntu; it passed on the first push. It checks correctness only: it does not compare digests with the macOS ones, so cross-platform bit-identity is still unverified.
+- **Determinism scope.** Bit-identical for a fixed binary and CPU architecture. The kernel uses its own PRNG and `-ffp-contract=off`, but identity across compilers or architectures has not been verified.
+- **CI.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the C++ tests, the Rust integration tests, the end-to-end demo (including replay verification) and an Airflow DAG import check on Ubuntu. It checks correctness only: it does not compare digests with the macOS ones, so cross-platform bit-identity is still unverified.
 
 ## Repository layout
 
-```
+```text
 core/             C++17 simulation kernel, standalone CLI and 10k+ assertion test suite
 orchestrator/     Rust crate `fleetctl`: ingest, detection, scenarios, runner, reports (+ integration tests)
 pipelines/airflow Airflow DAG and requirements
 deploy/k8s/       Namespace, storage, Indexed Job and kind cluster template
 scripts/          demo, Airflow/Kubernetes helpers, benchmark drivers
-bench/            summarizer and raw benchmark results
+bench/            summarizer, figure generator and raw benchmark results
 docs/             architecture, simulation model, determinism contract
 ```
 
